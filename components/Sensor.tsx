@@ -1,47 +1,47 @@
 import type { Accelerometer, Gyroscope, Magnetometer } from 'expo-sensors';
 import { StyleSheet, Text, View } from 'react-native';
 import { useEffect, useState } from 'react';
-import { useButchesStore } from '../store';
+import { type SensorReading, useBatchesStore } from '../stores/batch.store';
+import { BATCH_SIZE, DEFAULT_SENSORS_DATA, SENSOR_UPDATE_INTERVAL, SENSORS_IDS } from '../utils/constants';
 
-type Sensors = typeof Accelerometer | typeof Gyroscope | typeof Magnetometer;
+type SensorsInstances = typeof Accelerometer | typeof Gyroscope | typeof Magnetometer;
 
-const DEFAULT_SENSORS_DATA = {
-  x: 0,
-  y: 0,
-  z: 0,
-  timestamp: 0,
-};
-const SENSOR_UPDATE_INTERVAL = 16;
-const BUTCHES_COUNT = 375;
-
-export default function Sensor({ title, sensor, start }: { title: string, sensor: Sensors, start?: boolean }) {
+export default function Sensor({
+                                 title,
+                                 sensor,
+                                 start,
+                               }: { title: 'Accelerometer' | 'Gyroscope' | 'Magnetometer', sensor: SensorsInstances, start?: boolean }) {
   const [{ x, y, z, timestamp }, setData] = useState(DEFAULT_SENSORS_DATA);
   const [subscription, setSubscription] = useState<{ remove: () => void } | null | true>(null);
-  const incrementButchesCount = useButchesStore(state => state.increment);
-  let butchArray: [number, number, number, number][] = [];
+  const incrementCount = useBatchesStore(state => state.increment);
+  const updateBatch = useBatchesStore(state => state.updateBatchArray);
+  let localBatchArray: SensorReading[] = [];
   let nextIndex = 0;
 
-  const _pushButch = (x: number, y: number, z: number, timestamp: number) => {
-    butchArray[nextIndex] = [x, y, z, timestamp];
+  const _pushButch = (data: { timestamp: number, sensor_id: 0 | 1 | 2, x: number, y: number, z: number }) => {
+    const { x, y, z, timestamp, sensor_id } = data;
+    localBatchArray[nextIndex] = [timestamp, sensor_id, x, y, z];
     nextIndex++;
   };
 
-  const _fast = () => sensor.setUpdateInterval(SENSOR_UPDATE_INTERVAL);
+  const _fastUpdate = () => sensor.setUpdateInterval(SENSOR_UPDATE_INTERVAL);
 
   const _subscribe = () => {
     setSubscription(
       sensor.addListener(({ x, y, z }) => {
-        setData({
-            x,
-            y,
-            z,
-            timestamp: new Date().getTime(),
-          },
-        );
-        _pushButch(x, y, z, new Date().getTime());
-        if (butchArray.length === BUTCHES_COUNT) {
-          incrementButchesCount();
-          butchArray = [];
+        const dataToSave = {
+          timestamp: Date.now(),
+          sensor_id: SENSORS_IDS[title],
+          x,
+          y,
+          z,
+        };
+        setData(dataToSave);
+        _pushButch(dataToSave);
+        if (localBatchArray.length === BATCH_SIZE) {
+          incrementCount();
+          updateBatch(localBatchArray);
+          localBatchArray = [];
           nextIndex = 0;
         }
       }));
@@ -56,7 +56,7 @@ export default function Sensor({ title, sensor, start }: { title: string, sensor
   };
 
   useEffect(() => {
-    _fast();
+    _fastUpdate();
     if (start) {
       _subscribe();
     } else {
@@ -105,5 +105,5 @@ const styles = StyleSheet.create({
   sensorText: {
     fontSize: 16,
     color: '#f8fafc',
-  }
+  },
 });

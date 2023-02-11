@@ -27,7 +27,8 @@
       },
       "permissions": [
         "HIGH_SAMPLING_RATE_SENSORS"
-      ]
+      ],
+      "package": "com.dreamqip.sensrs"
     },
     "web": {
       "favicon": "./assets/favicon.png"
